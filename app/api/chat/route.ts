@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/google";
+import { google } from "@ai-sdk/google";
 import { convertToCoreMessages, streamText } from "ai";
 
 export async function POST(req: Request) {
