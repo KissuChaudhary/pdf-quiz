@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Check, X, RefreshCw, FileText } from 'lucide
 import QuizScore from "./score";
 import QuizReview from "./quiz-overview";
 import { Question } from "@/lib/schemas";
-import FlashcardView from "./flashcard-view";
+import FlashcardView from "./FlashcardView";
 
 type QuizMode = 'timed' | 'practice' | 'flashcard';
 
