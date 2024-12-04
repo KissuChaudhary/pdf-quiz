@@ -2,81 +2,26 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  X,
-  RefreshCw,
-  FileText,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, RefreshCw, FileText } from 'lucide-react';
 import QuizScore from "./score";
 import QuizReview from "./quiz-overview";
 import { Question } from "@/lib/schemas";
+import { QuizTimer } from './quiz-timer';
 
 type QuizProps = {
   questions: Question[];
   clearPDF: () => void;
   title: string;
+  difficulty: string;
 };
 
-const QuestionCard: React.FC<{
-  question: Question;
-  selectedAnswer: string | null;
-  onSelectAnswer: (answer: string) => void;
-  isSubmitted: boolean;
-  showCorrectAnswer: boolean;
-}> = ({ question, selectedAnswer, onSelectAnswer, showCorrectAnswer }) => {
-  const answerLabels = ["A", "B", "C", "D"];
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold leading-tight">
-        {question.question}
-      </h2>
-      <div className="grid grid-cols-1 gap-4">
-        {question.options.map((option, index) => (
-          <Button
-            key={index}
-            variant={
-              selectedAnswer === answerLabels[index] ? "secondary" : "outline"
-            }
-            className={`h-auto py-6 px-4 justify-start text-left whitespace-normal ${
-              showCorrectAnswer && answerLabels[index] === question.answer
-                ? "bg-green-600 hover:bg-green-700"
-                : showCorrectAnswer &&
-                    selectedAnswer === answerLabels[index] &&
-                    selectedAnswer !== question.answer
-                  ? "bg-red-600 hover:bg-red-700"
-                  : ""
-            }`}
-            onClick={() => onSelectAnswer(answerLabels[index])}
-          >
-            <span className="text-lg font-medium mr-4 shrink-0">
-              {answerLabels[index]}
-            </span>
-            <span className="flex-grow">{option}</span>
-            {(showCorrectAnswer && answerLabels[index] === question.answer) ||
-              (selectedAnswer === answerLabels[index] && (
-                <Check className="ml-2 shrink-0 text-white" size={20} />
-              ))}
-            {showCorrectAnswer &&
-              selectedAnswer === answerLabels[index] &&
-              selectedAnswer !== question.answer && (
-                <X className="ml-2 shrink-0 text-white" size={20} />
-              )}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+const QUIZ_DURATION = {
+  easy: 300, // 5 minutes
+  medium: 240, // 4 minutes
+  hard: 180, // 3 minutes
 };
 
-export default function Quiz({
-  questions,
-  clearPDF,
-  title = "Quiz",
-}: QuizProps) {
+export default function Quiz({ questions, clearPDF, title, difficulty }: QuizProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>(
     Array(questions.length).fill(null),
@@ -130,6 +75,10 @@ export default function Quiz({
     setProgress(0);
   };
 
+  const handleTimeUp = () => {
+    handleSubmit();
+  };
+
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
@@ -139,10 +88,16 @@ export default function Quiz({
           {title}
         </h1>
         <div className="relative">
-          {!isSubmitted && <Progress value={progress} className="h-1 mb-8" />}
+          {!isSubmitted && (
+            <>
+              <Progress value={progress} className="h-1 mb-4" />
+              <QuizTimer
+                duration={QUIZ_DURATION[difficulty as keyof typeof QUIZ_DURATION]}
+                onTimeUp={handleTimeUp}
+              />
+            </>
+          )}
           <div className="min-h-[400px]">
-            {" "}
-            {/* Prevent layout shift */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={isSubmitted ? "results" : currentQuestionIndex}
@@ -217,3 +172,4 @@ export default function Quiz({
     </div>
   );
 }
+
