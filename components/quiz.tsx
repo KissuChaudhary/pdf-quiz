@@ -6,22 +6,75 @@ import { ChevronLeft, ChevronRight, Check, X, RefreshCw, FileText } from 'lucide
 import QuizScore from "./score";
 import QuizReview from "./quiz-overview";
 import { Question } from "@/lib/schemas";
-import { QuizTimer } from './quiz-timer';
+import FlashcardView from "./flashcard-view";
+
+type QuizMode = 'timed' | 'practice' | 'flashcard';
 
 type QuizProps = {
   questions: Question[];
   clearPDF: () => void;
   title: string;
-  difficulty: string;
+  mode: QuizMode;
 };
 
-const QUIZ_DURATION = {
-  easy: 300, // 5 minutes
-  medium: 240, // 4 minutes
-  hard: 180, // 3 minutes
+const QuestionCard: React.FC<{
+  question: Question;
+  selectedAnswer: string | null;
+  onSelectAnswer: (answer: string) => void;
+  isSubmitted: boolean;
+  showCorrectAnswer: boolean;
+}> = ({ question, selectedAnswer, onSelectAnswer, showCorrectAnswer }) => {
+  const answerLabels = ["A", "B", "C", "D"];
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold leading-tight">
+        {question.question}
+      </h2>
+      <div className="grid grid-cols-1 gap-4">
+        {question.options.map((option, index) => (
+          <Button
+            key={index}
+            variant={
+              selectedAnswer === answerLabels[index] ? "secondary" : "outline"
+            }
+            className={`h-auto py-6 px-4 justify-start text-left whitespace-normal ${
+              showCorrectAnswer && answerLabels[index] === question.answer
+                ? "bg-green-600 hover:bg-green-700"
+                : showCorrectAnswer &&
+                    selectedAnswer === answerLabels[index] &&
+                    selectedAnswer !== question.answer
+                  ? "bg-red-600 hover:bg-red-700"
+                  : ""
+            }`}
+            onClick={() => onSelectAnswer(answerLabels[index])}
+          >
+            <span className="text-lg font-medium mr-4 shrink-0">
+              {answerLabels[index]}
+            </span>
+            <span className="flex-grow">{option}</span>
+            {(showCorrectAnswer && answerLabels[index] === question.answer) ||
+              (selectedAnswer === answerLabels[index] && (
+                <Check className="ml-2 shrink-0 text-white" size={20} />
+              ))}
+            {showCorrectAnswer &&
+              selectedAnswer === answerLabels[index] &&
+              selectedAnswer !== question.answer && (
+                <X className="ml-2 shrink-0 text-white" size={20} />
+              )}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
 };
 
-export default function Quiz({ questions, clearPDF, title, difficulty }: QuizProps) {
+export default function Quiz({
+  questions,
+  clearPDF,
+  title = "Quiz",
+  mode,
+}: QuizProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>(
     Array(questions.length).fill(null),
@@ -29,6 +82,7 @@ export default function Quiz({ questions, clearPDF, title, difficulty }: QuizPro
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,6 +90,30 @@ export default function Quiz({ questions, clearPDF, title, difficulty }: QuizPro
     }, 100);
     return () => clearTimeout(timer);
   }, [currentQuestionIndex, questions.length]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (mode === 'timed' && !isSubmitted) {
+      setTimeLeft(60 * 5); // 5 minutes
+      timer = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime === 1) {
+            clearInterval(timer);
+            handleSubmit();
+            return 0;
+          }
+          return prevTime ? prevTime - 1 : 0;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [mode, isSubmitted]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   const handleSelectAnswer = (answer: string) => {
     if (!isSubmitted) {
@@ -75,29 +153,24 @@ export default function Quiz({ questions, clearPDF, title, difficulty }: QuizPro
     setProgress(0);
   };
 
-  const handleTimeUp = () => {
-    handleSubmit();
-  };
-
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-3xl font-bold mb-8 text-center text-foreground">
-          {title}
+          {title} - {mode.charAt(0).toUpperCase() + mode.slice(1)} Mode
         </h1>
+        {mode === 'timed' && timeLeft !== null && (
+          <div className="text-center mb-4">
+            <span className="text-2xl font-bold">Time Left: {formatTime(timeLeft)}</span>
+          </div>
+        )}
         <div className="relative">
-          {!isSubmitted && (
-            <>
-              <Progress value={progress} className="h-1 mb-4" />
-              <QuizTimer
-                duration={QUIZ_DURATION[difficulty as keyof typeof QUIZ_DURATION]}
-                onTimeUp={handleTimeUp}
-              />
-            </>
-          )}
+          {!isSubmitted && <Progress value={progress} className="h-1 mb-8" />}
           <div className="min-h-[400px]">
+            {" "}
+            {/* Prevent layout shift */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={isSubmitted ? "results" : currentQuestionIndex}
@@ -108,35 +181,45 @@ export default function Quiz({ questions, clearPDF, title, difficulty }: QuizPro
               >
                 {!isSubmitted ? (
                   <div className="space-y-8">
-                    <QuestionCard
-                      question={currentQuestion}
-                      selectedAnswer={answers[currentQuestionIndex]}
-                      onSelectAnswer={handleSelectAnswer}
-                      isSubmitted={isSubmitted}
-                      showCorrectAnswer={false}
-                    />
-                    <div className="flex justify-between items-center pt-4">
-                      <Button
-                        onClick={handlePreviousQuestion}
-                        disabled={currentQuestionIndex === 0}
-                        variant="ghost"
-                      >
-                        <ChevronLeft className="mr-2 h-4 w-4" /> Previous
-                      </Button>
-                      <span className="text-sm font-medium">
-                        {currentQuestionIndex + 1} / {questions.length}
-                      </span>
-                      <Button
-                        onClick={handleNextQuestion}
-                        disabled={answers[currentQuestionIndex] === null}
-                        variant="ghost"
-                      >
-                        {currentQuestionIndex === questions.length - 1
-                          ? "Submit"
-                          : "Next"}{" "}
-                        <ChevronRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
+                    {mode === 'flashcard' ? (
+                      <FlashcardView
+                        question={currentQuestion}
+                        onNext={handleNextQuestion}
+                        onPrevious={handlePreviousQuestion}
+                      />
+                    ) : (
+                      <QuestionCard
+                        question={currentQuestion}
+                        selectedAnswer={answers[currentQuestionIndex]}
+                        onSelectAnswer={handleSelectAnswer}
+                        isSubmitted={isSubmitted}
+                        showCorrectAnswer={mode === 'practice'}
+                      />
+                    )}
+                    {mode !== 'flashcard' && (
+                      <div className="flex justify-between items-center pt-4">
+                        <Button
+                          onClick={handlePreviousQuestion}
+                          disabled={currentQuestionIndex === 0}
+                          variant="ghost"
+                        >
+                          <ChevronLeft className="mr-2 h-4 w-4" /> Previous
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {currentQuestionIndex + 1} / {questions.length}
+                        </span>
+                        <Button
+                          onClick={handleNextQuestion}
+                          disabled={answers[currentQuestionIndex] === null && mode !== 'practice'}
+                          variant="ghost"
+                        >
+                          {currentQuestionIndex === questions.length - 1
+                            ? "Submit"
+                            : "Next"}{" "}
+                          <ChevronRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-8">
