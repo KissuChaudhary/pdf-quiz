@@ -1,11 +1,18 @@
 import { questionSchema, questionsSchema } from "@/lib/schemas";
 import { google } from "@ai-sdk/google";
 import { streamObject } from "ai";
+import * as z from 'zod';
 
 export const maxDuration = 60;
 
+const enhancedQuestionSchema = questionSchema.extend({
+  difficulty: z.enum(['easy', 'medium', 'hard']),
+});
+
+const enhancedQuestionsSchema = z.array(enhancedQuestionSchema).length(4);
+
 export async function POST(req: Request) {
-  const { files } = await req.json();
+  const { files, difficulty = 'medium' } = await req.json();
   const firstFile = files[0].data;
 
   const result = await streamObject({
@@ -31,10 +38,10 @@ export async function POST(req: Request) {
         ],
       },
     ],
-    schema: questionSchema,
+    schema: enhancedQuestionSchema,
     output: "array",
     onFinish: ({ object }) => {
-      const res = questionsSchema.safeParse(object);
+      const res = enhancedQuestionsSchema.safeParse(object);
       if (res.error) {
         throw new Error(res.error.errors.map((e) => e.message).join("\n"));
       }
@@ -43,3 +50,4 @@ export async function POST(req: Request) {
 
   return result.toTextStreamResponse();
 }
+
